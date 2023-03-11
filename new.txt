@@ -1,0 +1,48 @@
+import librosa
+import tensorflow as tf
+import soundfile as sf
+import numpy as np
+import tensorflow_hub as hub
+
+# Load audio file
+audio_file = 'test.wav'
+audio, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+
+# Resample audio to 16 kHz
+resampled_audio = librosa.resample(audio, orig_sr=sample_rate, target_sr=16000)
+
+# Calculate the number of samples per 1-second chunk
+samples_per_chunk = 16000
+
+# Split the audio into chunks of 1-second each
+audio_chunks = []
+for i in range(0, len(resampled_audio), samples_per_chunk):
+    chunk = resampled_audio[i:i + samples_per_chunk]
+    if len(chunk) == samples_per_chunk:
+        audio_chunks.append(chunk)
+
+# Convert numpy array to TensorFlow tensor
+audio_tensors = []
+for chunk in audio_chunks:
+    audio_tensor = tf.convert_to_tensor(chunk, dtype=tf.float32)
+    audio_tensors.append(audio_tensor)
+
+# Load noise reduction model from TensorFlow Hub
+model_url = "https://tfhub.dev/google/nonsemantic-speech-benchmark/trillsson4/1"
+model = hub.load(model_url)
+
+# Denoise audio using the pretrained model
+denoised_audio_chunks = []
+for audio_tensor in audio_tensors:
+    audio_tensor = tf.reshape(audio_tensor, (1, -1))
+    denoised_audio_tensor = model(audio_tensor, True, None)
+    denoised_audio = denoised_audio_tensor['embedding'].numpy()
+    denoised_audio = denoised_audio.squeeze() / np.max(np.abs(denoised_audio))
+    denoised_audio_chunks.append(denoised_audio)
+
+# Concatenate denoised audio chunks
+denoised_audio = np.concatenate(denoised_audio_chunks, axis=0)
+
+# Write denoised audio to file
+output_file = 'denoised_audio.wav'
+sf.write(output_file, denoised_audio, sample_rate)

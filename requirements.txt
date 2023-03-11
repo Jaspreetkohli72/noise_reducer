@@ -1,0 +1,5 @@
+librosa
+tensorflow
+soundfile
+numpy
+tensorflow_hub
